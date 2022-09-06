@@ -7,7 +7,9 @@ inputs:
     required: true
     default: services
 outputs:
-  matrix: ${{ steps.matrix.outputs.directories_matrix }}
+  matrix: 
+    description: "Matrix"
+    value: ${{ steps.matrix.outputs.directories_matrix }}
 
 runs:
   using: composite
@@ -50,10 +52,12 @@ runs:
   - name: Install json2yaml
     run: |
       sudo npm install -g json2yaml
+    shell: bash
   
   - name: Check matrix definition
     run: |
-      matrix='${{ needs.build-matrix.outputs.directories_matrix }}'
+      matrix='${{ steps.matrix.outputs.directories_matrix }}'
       echo $matrix
       echo $matrix | jq .
       echo $matrix | json2yaml
+    shell: bash
