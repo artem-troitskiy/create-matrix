@@ -1,0 +1,59 @@
+name: Create matrix of services
+description: Creates a matrix of services based on changed files in a branch or specific commit
+author: Artem Troitskiy
+inputs:
+  folder: 
+    description: Folder containing services code
+    required: true
+    default: services
+outputs:
+  matrix: ${{ steps.matrix.outputs.directories_matrix }}
+
+runs:
+  using: composite
+  steps:
+  - name: Checkout source (on push)
+    uses: actions/checkout@v3
+    with:
+      ref: ${{ github.ref_name }}
+      fetch-depth: 2
+    if: github.event_name == 'push'
+
+  - name: Checkout source (on pull request)
+    uses: actions/checkout@v3
+    with:
+      ref: ${{ github.head_ref }}
+      fetch-depth: 0
+    if: github.event_name == 'pull_request'
+
+  - name: Get list of changed directories
+    id: matrix
+    run: |
+      $DIRECTORIES_MATRIX = @()
+      if ('${{ github.event_name }}' -eq 'push') {
+        $CHANGED_FILES = $(git show --name-only --pretty='' $(git log -n 1 --pretty=format:'%H')) -split "`r`n"
+      }
+      elseif ('${{ github.event_name }}' -eq 'pull_request') {
+        git fetch origin ${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}
+        $CHANGED_FILES = $(git diff --name-only origin/${{ github.base_ref }}) -split "`r`n"
+      }
+      foreach($file in $CHANGED_FILES) {
+        if ($file -like '${{ inputs.folder }}/*') {
+          $directory = [regex]::Matches($file, '(?<=${{ inputs.folder }}\/).+?(?=\/)').Value
+          if( -not($DIRECTORIES_MATRIX.contains($directory))) {$DIRECTORIES_MATRIX += $directory}
+        }
+      }
+      $DIRECTORIES_MATRIX_JSON = ConvertTo-Json -Compress $DIRECTORIES_MATRIX
+      echo "::set-output name=directories_matrix::$DIRECTORIES_MATRIX_JSON"
+    shell: pwsh
+
+  - name: Install json2yaml
+    run: |
+      sudo npm install -g json2yaml
+  
+  - name: Check matrix definition
+    run: |
+      matrix='${{ needs.build-matrix.outputs.directories_matrix }}'
+      echo $matrix
+      echo $matrix | jq .
+      echo $matrix | json2yaml
